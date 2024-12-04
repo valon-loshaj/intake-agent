@@ -1,0 +1,17 @@
+{
+  "required" : [ "documents" ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "documents" : {
+      "title" : "documents",
+      "description" : "Receive a collection of ReceivedDocument records and use this action to analyze the documents within the collection for missing information. If no documents are provided, please ask the use to first search for the Received Document records which they want to analyze for missing information.",
+      "lightning:type" : "lightning__recordInfoType",
+      "lightning:sObjectInfo" : {
+        "apiName" : "ReceivedDocument"
+      },
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

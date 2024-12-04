@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Retrieves documents with a status of &quot;Draft&quot;, sorted by CreatedDate in descending order, including OCR-related fields.</description>
+    <invocationTarget>IntakeAgentDocPickerController</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <isConfirmationRequired>false</isConfirmationRequired>
+    <masterLabel>Get Received Documents Awaiting Review</masterLabel>
+</GenAiFunction>
