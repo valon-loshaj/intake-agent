@@ -1,25 +1,44 @@
 public with sharing class CSRAgentMissingInfoController {
+    
+    // Input wrapper class for the invocable method
+    public class DocumentAnalysisRequest {
+        @InvocableVariable(required=true label='Documents to Analyze' description='List of received documents that need analysis')
+        public List<ReceivedDocument> documentsToAnalyze;
+        
+        @InvocableVariable(required=false label='Minimum OCR Score' description='Minimum acceptable OCR confidence score')
+        public Decimal minimumOCRScore = 0.88;
+    }
+
+    // Output wrapper class for consistent response handling
+    public class DocumentAnalysisResult {
+        @InvocableVariable(label='Processed Documents' description='Documents after analysis with updated status')
+        public List<ReceivedDocument> processedDocuments;
+    }
+
     @InvocableMethod(label='Check Documents For Missing Information' 
                      description='Analyzes documents for missing mandatory information')
-    public static List<List<ReceivedDocument>> checkDocumentsForMissingInformation(List<ReceivedDocument> documents) {
-        validateInput(documents);
-        checkUserAccess();
+    public static List<DocumentAnalysisResult> checkDocumentsForMissingInformation(List<DocumentAnalysisRequest> requests) {
+        List<DocumentAnalysisResult> results = new List<DocumentAnalysisResult>();
+        
+        for (DocumentAnalysisRequest request : requests) {
+            validateInput(request.documentsToAnalyze);
+            checkUserAccess();
 
-        List<ReceivedDocument> results = new List<ReceivedDocument>();
-        for (ReceivedDocument doc : documents) {
-            processDocument(doc);
-            results.add(doc);
+            List<ReceivedDocument> processedDocs = new List<ReceivedDocument>();
+            for (ReceivedDocument doc : request.documentsToAnalyze) {
+                processDocument(doc, request.minimumOCRScore);
+                processedDocs.add(doc);
+            }
+
+            validateCRUDPermissions();
+            update processedDocs;
+
+            DocumentAnalysisResult result = new DocumentAnalysisResult();
+            result.processedDocuments = processedDocs;
+            results.add(result);
         }
 
-        // Update the received documents with the new status and status reason
-		validateCRUDPermissions();
-        update results;
-
-		// Wrap the results list in another list for Flow compatibility
-        List<List<ReceivedDocument>> wrappedResults = new List<List<ReceivedDocument>>();
-        wrappedResults.add(results);
-
-        return wrappedResults;
+        return results;
     }
 
     private static void validateInput(List<ReceivedDocument> documents) {
@@ -40,8 +59,9 @@ public with sharing class CSRAgentMissingInfoController {
 		}
 	}
 
-    private static void processDocument(ReceivedDocument doc) {
-        if (doc.APS_OCR_Confidence_Score__c < 0.88) {
+    // Update the processDocument method to accept OCR threshold
+    private static void processDocument(ReceivedDocument doc, Decimal minimumOCRScore) {
+        if (doc.APS_OCR_Confidence_Score__c < minimumOCRScore) {
             doc.Status = 'Unusable';
             doc.StatusReason = 'Low OCR Confidence Score';
             return;
