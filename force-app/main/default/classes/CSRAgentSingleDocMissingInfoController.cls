@@ -1,51 +1,65 @@
-public with sharing class CSRAgentMissingInfoController {
+public with sharing class CSRAgentSingleDocMissingInfoController {
     
-    // Input wrapper class for the invocable method
-    public class DocumentAnalysisRequest {
-        @InvocableVariable(required=true label='Documents to Analyze' description='List of received documents that need analysis')
-        public List<ReceivedDocument> documentsToAnalyze;
+    // Input wrapper class
+    public class SingleDocumentRequest {
+        @InvocableVariable(required=true label='Document ID' description='ID of the document to analyze')
+        public String documentId;
         
         @InvocableVariable(required=false label='Minimum OCR Score' description='Minimum acceptable OCR confidence score')
         public Decimal minimumOCRScore = 0.88;
     }
 
-    // Output wrapper class for consistent response handling
-    public class DocumentAnalysisResult {
-        @InvocableVariable(label='Processed Documents' description='Documents after analysis with updated status')
-        public List<ReceivedDocument> processedDocuments;
-    }
-
-    @InvocableMethod(label='Check Documents For Missing Information' 
-                     description='Analyzes documents for missing mandatory information')
-    public static List<DocumentAnalysisResult> checkDocumentsForMissingInformation(List<DocumentAnalysisRequest> requests) {
-        List<DocumentAnalysisResult> results = new List<DocumentAnalysisResult>();
+    // Output wrapper class
+    public class SingleDocumentResult {
+        @InvocableVariable(label='Document Status' description='Updated status of the document')
+        public String status;
         
-		List<ReceivedDocument> processedDocs = new List<ReceivedDocument>();
-		for (DocumentAnalysisRequest request : requests) {
-            validateInput(request.documentsToAnalyze);
-            checkUserAccess();
-
-            for (ReceivedDocument doc : request.documentsToAnalyze) {
-                processDocument(doc, request.minimumOCRScore);
-                processedDocs.add(doc);
-            }
-
-            validateCRUDPermissions();
-
-            DocumentAnalysisResult result = new DocumentAnalysisResult();
-            result.processedDocuments = processedDocs;
-            results.add(result);
-        }
-
-		validateCRUDPermissions();
-		update processedDocs;
-        return results;
+        @InvocableVariable(label='Status Reason' description='Reason for the status update')
+        public String statusReason;
     }
 
-    private static void validateInput(List<ReceivedDocument> documents) {
-        if (documents == null || documents.isEmpty()) {
-            throw new IllegalArgumentException('Documents list cannot be null or empty.');
+    @InvocableMethod(label='Check Single Document For Missing Information' 
+                     description='Analyzes a single document for missing mandatory information')
+    public static List<SingleDocumentResult> checkSingleDocumentForMissingInformation(List<SingleDocumentRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException('Request list cannot be null or empty.');
         }
+
+        // Get first request since we only process one document
+        SingleDocumentRequest request = requests[0];
+        if (request == null || String.isBlank(request.documentId)) {
+            throw new IllegalArgumentException('Document ID cannot be null or empty.');
+        }
+
+        checkUserAccess();
+        validateCRUDPermissions();
+
+        // Query single document
+        List<ReceivedDocument> docs = [
+            SELECT Id, Status, StatusReason, APS_OCR_Confidence_Score__c, 
+                   APS_OCR_JSON_Response__c
+            FROM ReceivedDocument 
+            WHERE Id = :request.documentId
+            LIMIT 1
+        ];
+
+        if (docs.isEmpty()) {
+            throw new IllegalArgumentException('Document not found with ID: ' + request.documentId);
+        }
+
+        // Process document
+        ReceivedDocument doc = docs[0];
+        processDocument(doc, request.minimumOCRScore);
+
+        // Single update outside of any loops
+        update doc;
+
+        // Create result and wrap in List
+        SingleDocumentResult result = new SingleDocumentResult();
+        result.status = doc.Status;
+        result.statusReason = doc.StatusReason;
+        
+        return new List<SingleDocumentResult>{result};
     }
 
     private static void checkUserAccess() {
@@ -54,13 +68,12 @@ public with sharing class CSRAgentMissingInfoController {
         }
     }
 
-	private static void validateCRUDPermissions() {
-		if (!Schema.sObjectType.ReceivedDocument.isUpdateable()) {
-			throw new System.NoAccessException();
-		}
-	}
+    private static void validateCRUDPermissions() {
+        if (!Schema.sObjectType.ReceivedDocument.isUpdateable()) {
+            throw new System.NoAccessException();
+        }
+    }
 
-    // Update the processDocument method to accept OCR threshold
     private static void processDocument(ReceivedDocument doc, Decimal minimumOCRScore) {
         if (doc.APS_OCR_Confidence_Score__c < minimumOCRScore) {
             doc.Status = 'Unusable';
